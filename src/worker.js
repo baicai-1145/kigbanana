@@ -297,7 +297,7 @@ async function handleGetUserHistory(request, env) {
 
 async function handleGetAllHistory(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -319,7 +319,7 @@ async function handleGetTask(request, env) {
   if (!data) return new Response("Task not found", { status: 404 });
 
   // 权限检查：必须是任务所有者（IP/User）或者是管理员
-  if (identifier.id !== "baicai1145" && data.user !== identifier.id) {
+  if (identifier.id !== env.ADMIN_USERNAME && data.user !== identifier.id) {
     return new Response("Unauthorized", { status: 401 });
   }
   
@@ -351,7 +351,7 @@ async function handleLogin(request, env) {
   const { username, password } = await request.json();
   
   // 特殊处理管理员
-  if (username === "baicai1145" && password === "18751172627wang") {
+  if (username === env.ADMIN_USERNAME && password === env.ADMIN_PASSWORD) {
     return new Response(JSON.stringify({ token: username, isAdmin: true }));
   }
 
@@ -378,7 +378,7 @@ async function handleReport(request, env) {
 
 async function handleGetReports(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -393,7 +393,7 @@ async function handleGetReports(request, env) {
 
 async function handleUpdatePrompt(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -412,7 +412,7 @@ async function handlePublishToShowcase(request, env) {
   if (!taskData) return new Response("Task not found", { status: 404 });
 
   // 简单权限检查：如果是用户，检查是否是自己的任务；如果是管理员，随意
-  if (identifier.id !== "baicai1145" && taskData.user !== identifier.id) {
+  if (identifier.id !== env.ADMIN_USERNAME && taskData.user !== identifier.id) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -438,7 +438,7 @@ async function handleGetShowcase(request, env) {
 
 async function handleAdminDeleteShowcase(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -449,7 +449,7 @@ async function handleAdminDeleteShowcase(request, env) {
 
 async function handleAdminAddShowcase(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -458,7 +458,7 @@ async function handleAdminAddShowcase(request, env) {
   
   const showcaseData = {
     id: taskId,
-    user: " baicai1145 (Admin)",
+    user: ` ${env.ADMIN_USERNAME} (Admin)`,
     originalUrl,
     imageUrl,
     publishedAt: new Date().toISOString()
@@ -493,7 +493,7 @@ async function handleUpdateThumbnail(request, env) {
 
 async function handleGenInvite(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -504,7 +504,7 @@ async function handleGenInvite(request, env) {
 
 async function handleAdminListTargets(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -537,7 +537,7 @@ async function handleAdminListTargets(request, env) {
 
 async function handleResetQuota(request, env) {
   const identifier = await getClientIdentifier(request);
-  if (identifier.id !== "baicai1145") {
+  if (identifier.id !== env.ADMIN_USERNAME) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -556,7 +556,7 @@ async function handleUserInfo(request, env) {
   if (identifier.type === "user") {
     const quotaKey = `quota:user:${date}:${identifier.id}`;
     const used = parseInt(await env.KIG_KV.get(quotaKey) || "0");
-    const isAdmin = identifier.id === "baicai1145";
+    const isAdmin = identifier.id === env.ADMIN_USERNAME;
     const limit = isAdmin ? "∞" : 50;
     return new Response(JSON.stringify({ username: identifier.id, used, limit, isAdmin, loggedIn: true }), { headers: { "Content-Type": "application/json" } });
   } else {

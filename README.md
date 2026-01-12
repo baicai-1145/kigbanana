@@ -28,16 +28,22 @@ wrangler kv:namespace create KIG_KV
 ### 3. 配置 `wrangler.toml`
 将本项目根目录下的 `wrangler.toml` 中的 `YOUR_KV_NAMESPACE_ID` 替换为上面获得的 ID。
 
-### 4. 部署
+### 4. 设置密钥
+在 Cloudflare 控制台或使用命令设置以下密钥：
 ```bash
-wrangler deploy
+npx wrangler secret put API_KEY
+npx wrangler secret put ADMIN_USERNAME
+npx wrangler secret put ADMIN_PASSWORD
 ```
 
-### 5. 初始化
+### 5. 部署
+```bash
+npx wrangler deploy
+```
+
+### 6. 初始化
 1. 访问部署后的网址。
-2. 使用管理员账户登录：
-   - 用户名：`baicaai1145`
-   - 密码：`18751172627wang`
+2. 使用您设置的管理员账户（`ADMIN_USERNAME` 和 `ADMIN_PASSWORD`）登录。
 3. 登录后在页面底部打开管理员面板。
 4. 将 `nano_banana_pro_kig_en.md` 中的内容完整粘贴到 **系统 Prompt 修改** 框中并点击更新。
 
