@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nano Banana Pro - 公益图床/生成</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --bg: #000; --text: #fff; --border: #333; --accent: #fff; --btn-text: #000; --hover-bg: #111; --overlay: rgba(0,0,0,0.9); }
+        [data-theme="light"] { --bg: #fff; --text: #000; --border: #ddd; --accent: #000; --btn-text: #fff; --hover-bg: #f9f9f9; --overlay: rgba(255,255,255,0.9); }
+
+        body { background-color: var(--bg); color: var(--text); transition: background-color 0.2s, color 0.2s; }
+        .bw-border { border: 1px solid var(--border); }
+        .bw-btn { background-color: var(--accent); color: var(--btn-text); transition: all 0.2s; }
+        .bw-btn:hover { opacity: 0.8; }
+        .bw-btn:disabled { background-color: var(--border); color: #666; cursor: not-allowed; }
+        .bw-input { background-color: var(--bg); border: 1px solid var(--border); color: var(--text); outline: none; }
+        .bw-input:focus { border-color: var(--accent); }
+        .modal-overlay { background-color: var(--overlay); }
+        .modal-content { background-color: var(--bg); }
+        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        
+        #drop-zone:hover { background-color: var(--hover-bg); }
+        .bg-zinc-900 { background-color: var(--hover-bg) !important; }
+        .text-zinc-500 { color: #888 !important; }
+        .text-zinc-400 { color: #aaa !important; }
+        .border-zinc-800 { border-color: var(--border) !important; }
+        
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans" data-theme="light">
+    <!-- Header -->
+    <header class="p-4 bw-border flex justify-between items-center sticky top-0 bg-inherit z-10">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold tracking-tighter uppercase">NANO BANANA PRO</h1>
+            <button onclick="toggleTheme()" class="bw-border px-2 py-0.5 text-[10px] uppercase font-bold hover:opacity-70 transition-opacity">
+                <span id="theme-text">Light Mode</span>
+            </button>
+            <div id="quota-badge" class="px-2 py-0.5 bw-border text-[10px] text-zinc-400 rounded-sm">
+                载入中...
+            </div>
+        </div>
+        <div id="auth-section" class="flex gap-2 text-sm">
+            <button onclick="showModal('login-modal')" class="hover:underline">登录</button>
+            <span>/</span>
+            <button onclick="showModal('register-modal')" class="hover:underline">注册</button>
+        </div>
+        <div id="user-section" class="hidden flex gap-4 items-center text-sm">
+            <span id="user-display"></span>
+            <button onclick="logout()" class="hover:underline opacity-50">退出</button>
+        </div>
+    </header>
+
+    <main class="flex-grow p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            <!-- Upload & Config Section -->
+            <section class="space-y-4">
+                <h2 class="text-xs text-zinc-500 uppercase border-b border-zinc-800 pb-1">原始图片 / 配置</h2>
+                <div id="drop-zone" class="bw-border border-dashed aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-900 transition-colors">
+                    <p id="upload-placeholder" class="text-zinc-500">点击或拖拽图片上传</p>
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                    <img id="preview-input" class="hidden max-h-full object-contain p-2">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs text-zinc-500 uppercase">Aspect Ratio</label>
+                        <select id="aspect-ratio" class="w-full bw-input p-2 text-sm">
+                            <option value="auto">自动 (保持原图)</option>
+                            <option value="1:1">1:1</option>
+                            <option value="2:3">2:3</option>
+                            <option value="3:2">3:2</option>
+                            <option value="3:4">3:4</option>
+                            <option value="4:3">4:3</option>
+                            <option value="4:5">4:5</option>
+                            <option value="5:4">5:4</option>
+                            <option value="9:16">9:16</option>
+                            <option value="16:9">16:9</option>
+                            <option value="21:9">21:9</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs text-zinc-500 uppercase">Resolution</label>
+                        <select id="resolution" class="w-full bw-input p-2 text-sm">
+                            <option value="1K">1K</option>
+                            <option value="2K" selected>2K</option>
+                            <option id="res-4k" value="4K">4K</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button id="generate-btn" class="w-full bw-btn font-bold py-3 uppercase tracking-widest disabled:opacity-50">
+                    生成图片
+                </button>
+            </section>
+
+            <!-- Result Section -->
+            <section id="result-section" class="space-y-4">
+                <h2 class="text-xs text-zinc-500 uppercase border-b border-zinc-800 pb-1">生成结果</h2>
+                <div id="result-container" class="bw-border bg-zinc-900 aspect-square flex items-center justify-center relative group">
+                    <img id="result-img" class="max-h-full object-contain cursor-zoom-in" onclick="showLightbox(this.src)">
+                    <div id="loading-overlay" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center">
+                        <div class="text-center space-y-2">
+                            <div class="loading text-lg font-mono">GENERATING...</div>
+                            <div class="text-xs text-zinc-500">可能需要 10-30 秒</div>
+                        </div>
+                    </div>
+                    <div id="result-placeholder" class="text-zinc-700 text-sm italic">等待生成...</div>
+                </div>
+                
+                <!-- Thinking Process -->
+                <div id="thinking-process" class="hidden space-y-2">
+                    <label class="text-[10px] text-zinc-500 uppercase tracking-widest">Thinking Process / Reasoning</label>
+                    <div id="thinking-content" class="text-xs text-zinc-400 bg-zinc-900/50 p-4 bw-border font-mono leading-relaxed italic whitespace-pre-wrap break-words max-h-[300px] overflow-y-auto shadow-inner"></div>
+                </div>
+
+                <div id="result-actions" class="hidden flex justify-between items-center">
+                    <div class="flex gap-4">
+                        <button id="download-btn" class="text-sm hover:underline">保存图片</button>
+                        <button id="publish-btn" onclick="publishToShowcase()" class="text-sm hover:underline">展示到广场</button>
+                    </div>
+                    <button onclick="showModal('report-modal')" class="text-sm text-zinc-500 hover:text-white">效果反馈</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- History Section -->
+        <section id="history-section" class="space-y-4 pt-8 border-t border-zinc-800">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-1">
+                <h2 id="history-title" class="text-xs text-zinc-500 uppercase">历史记录</h2>
+                <button onclick="loadUserHistory()" class="text-[10px] text-zinc-500 hover:text-white uppercase">刷新</button>
+            </div>
+            <div id="history-list" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                <!-- History items -->
+            </div>
+        </section>
+
+        <!-- Showcase Section -->
+        <section id="showcase-section" class="space-y-4 pt-8 border-t border-zinc-800">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-1">
+                <h2 class="text-xs text-zinc-500 uppercase">作品广场 (对比展示)</h2>
+                <button onclick="loadShowcase()" class="text-[10px] text-zinc-500 hover:text-white uppercase">刷新</button>
+            </div>
+            <div id="showcase-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Showcase items -->
+            </div>
+        </section>
+
+        <!-- Admin Section -->
+        <section id="admin-section" class="hidden space-y-6 pt-8 border-t border-zinc-800">
+            <h2 class="text-xl font-bold">管理员面板</h2>
+            
+            <div class="space-y-2">
+                <label class="text-sm font-medium">系统 Prompt 修改</label>
+                <textarea id="admin-prompt" class="w-full bw-input p-3 text-xs h-48 font-mono" placeholder="输入系统提示词..."></textarea>
+                <button onclick="updatePrompt()" class="bw-btn px-4 py-2 text-xs uppercase font-bold">更新提示词</button>
+            </div>
+
+            <div class="space-y-4">
+                <label class="text-sm font-medium">邀请码管理</label>
+                <div class="flex gap-2">
+                    <button onclick="generateInvite()" class="bw-btn px-4 py-2 text-xs uppercase font-bold">生成新邀请码</button>
+                    <div id="new-invite-code" class="text-sm font-mono p-2 bw-border flex-grow bg-zinc-900 hidden"></div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <label class="text-sm font-medium">额度管理</label>
+                <div class="flex gap-2">
+                    <select id="reset-type" class="bw-input p-2 text-xs">
+                        <option value="user">注册用户 (Username)</option>
+                        <option value="ip">游客 (IP)</option>
+                    </select>
+                    <input type="text" id="reset-id" list="active-users-list" placeholder="选择或输入用户名/IP" class="flex-grow bw-input p-2 text-xs">
+                    <datalist id="active-users-list"></datalist>
+                    <button onclick="resetQuota()" class="bw-btn px-4 py-2 text-xs font-bold uppercase">重置今日额度</button>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <label class="text-sm font-medium">全站任务记录 (最近50条)</label>
+                <div id="admin-history-list" class="space-y-2 max-h-96 overflow-y-auto">
+                    <!-- Admin all history -->
+                </div>
+            </div>
+
+            <div class="space-y-4 pt-4 border-t border-zinc-800">
+                <label class="text-sm font-medium">手动发布到作品广场</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-zinc-500 uppercase">原图 (Original Image)</label>
+                        <input type="file" id="manual-original" class="w-full bw-input p-2 text-xs" accept="image/*">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-zinc-500 uppercase">生成图 (Generated Image)</label>
+                        <input type="file" id="manual-generated" class="w-full bw-input p-2 text-xs" accept="image/*">
+                    </div>
+                </div>
+                <button onclick="manualUploadShowcase()" class="bw-btn px-4 py-2 text-xs uppercase font-bold mt-2">上传并发布</button>
+            </div>
+
+            <div class="space-y-4">
+                <label class="text-sm font-medium">用户反馈列表</label>
+                <div id="reports-list" class="space-y-2 max-h-96 overflow-y-auto">
+                    <!-- Reports will be loaded here -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="p-8 text-center text-xs text-zinc-600 space-y-2">
+        <p>公益项目，请勿滥用。交流群请加 QQ: 3423714059 获取注册码。</p>
+        <p>© 2024 NANO BANANA PRO</p>
+    </footer>
+
+    <!-- Modals -->
+    <div id="login-modal" class="modal hidden fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4">
+        <div class="bw-border modal-content w-full max-w-sm p-6 space-y-4">
+            <h3 class="text-lg font-bold">登录</h3>
+            <input type="text" id="login-username" placeholder="用户名" class="w-full bw-input p-2 text-sm">
+            <input type="password" id="login-password" placeholder="密码" class="w-full bw-input p-2 text-sm">
+            <div class="flex gap-2">
+                <button onclick="login()" class="flex-grow bw-btn py-2 text-sm font-bold">确认</button>
+                <button onclick="hideModal('login-modal')" class="px-4 py-2 text-sm border border-zinc-800">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="register-modal" class="modal hidden fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4">
+        <div class="bw-border modal-content w-full max-w-sm p-6 space-y-4">
+            <h3 class="text-lg font-bold">注册</h3>
+            <p class="text-xs text-zinc-500">邀请码请加 QQ 3423714059 获取</p>
+            <input type="text" id="reg-username" placeholder="用户名" class="w-full bw-input p-2 text-sm">
+            <input type="password" id="reg-password" placeholder="密码" class="w-full bw-input p-2 text-sm">
+            <input type="text" id="reg-invite" placeholder="邀请码" class="w-full bw-input p-2 text-sm">
+            <div class="flex gap-2">
+                <button onclick="register()" class="flex-grow bw-btn py-2 text-sm font-bold">确认</button>
+                <button onclick="hideModal('register-modal')" class="px-4 py-2 text-sm border border-zinc-800">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-modal" class="modal hidden fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4">
+        <div class="bw-border modal-content w-full max-w-sm p-6 space-y-4">
+            <h3 class="text-lg font-bold">反馈效果差的情况</h3>
+            <textarea id="report-reason" class="w-full bw-input p-2 text-sm h-24" placeholder="描述具体哪里不满意..."></textarea>
+            <div class="flex gap-2">
+                <button onclick="submitReport()" class="flex-grow bw-btn py-2 text-sm font-bold">提交</button>
+                <button onclick="hideModal('report-modal')" class="px-4 py-2 text-sm border border-zinc-800">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox Modal -->
+    <div id="lightbox-modal" class="modal hidden fixed inset-0 modal-overlay z-[60] flex items-center justify-center p-4" onclick="hideModal('lightbox-modal')">
+        <div class="relative max-w-5xl w-full max-h-[90vh] flex items-center justify-center">
+            <img id="lightbox-img" src="" class="max-w-full max-h-[90vh] object-contain bw-border shadow-2xl shadow-black">
+            <button class="absolute -top-10 right-0 text-white text-sm uppercase font-bold hover:underline">点击任何位置关闭</button>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let selectedFile = null;
+        let currentTaskId = null;
+        let adminTargets = { users: [], ips: [] };
+
+        // Theme Handling
+        function toggleTheme() {
+            const body = document.body;
+            const text = document.getElementById('theme-text');
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            body.setAttribute('data-theme', newTheme);
+            text.innerText = isDark ? 'Dark Mode' : 'Light Mode';
+            localStorage.setItem('kig_theme', newTheme);
+        }
+
+        // Apply saved theme
+        const savedTheme = localStorage.getItem('kig_theme') || 'light';
+        document.body.setAttribute('data-theme', savedTheme);
+        document.getElementById('theme-text').innerText = savedTheme === 'dark' ? 'Light Mode' : 'Dark Mode';
+
+        // Utils
+        async function createThumbnail(base64, size = 400) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const scale = size / Math.max(img.width, img.height);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8)); // 提高到 0.8 质量
+                };
+                img.src = base64;
+            });
+        }
+
+        async function calculateHash(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // UI Helpers
+        function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function hideModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function showLightbox(url) {
+            const img = document.getElementById('lightbox-img');
+            img.src = url;
+            showModal('lightbox-modal');
+        }
+
+        // File Handling
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewInput = document.getElementById('preview-input');
+
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => handleFiles(e.target.files);
+        
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('bg-zinc-900'); };
+        dropZone.ondragleave = () => { dropZone.classList.remove('bg-zinc-900'); };
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('bg-zinc-900');
+            handleFiles(e.dataTransfer.files);
+        };
+
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            selectedFile = files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewInput.src = e.target.result;
+                previewInput.classList.remove('hidden');
+                dropZone.querySelector('p').classList.add('hidden');
+
+                // 自动识别比例
+                const img = new Image();
+                img.onload = () => {
+                    const ratio = img.width / img.height;
+                    document.getElementById('aspect-ratio').dataset.detected = findClosestRatio(ratio);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(selectedFile);
+        }
+
+        function findClosestRatio(target) {
+            const supported = {
+                "1:1": 1, "2:3": 0.66, "3:2": 1.5, "3:4": 0.75, "4:3": 1.33, 
+                "4:5": 0.8, "5:4": 1.25, "9:16": 0.56, "16:9": 1.77, "21:9": 2.33
+            };
+            let closest = "1:1";
+            let minDiff = Infinity;
+            for (const [name, val] of Object.entries(supported)) {
+                const diff = Math.abs(target - val);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = name;
+                }
+            }
+            return closest;
+        }
+
+        // Auth
+        async function login() {
+            const u = document.getElementById('login-username').value;
+            const p = document.getElementById('login-password').value;
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            if (data.token) {
+                localStorage.setItem('kig_token', data.token);
+                hideModal('login-modal');
+                init();
+            } else {
+                alert(data.error);
+            }
+        }
+
+        async function register() {
+            const u = document.getElementById('reg-username').value;
+            const p = document.getElementById('reg-password').value;
+            const i = document.getElementById('reg-invite').value;
+            const res = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p, invitationCode: i })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('注册成功，请登录');
+                hideModal('register-modal');
+                showModal('login-modal');
+            } else {
+                alert(data.error);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('kig_token');
+            location.reload();
+        }
+
+        async function init() {
+            const token = localStorage.getItem('kig_token');
+            const res = await fetch('/api/user/info', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            
+            if (res.ok) {
+                const info = await res.json();
+                currentUser = info.loggedIn ? info : null;
+                
+                // 更新配额显示
+                const badge = document.getElementById('quota-badge');
+                badge.innerText = `今日配额: ${info.used} / ${info.limit}`;
+                
+                // 加载历史和广场
+                loadUserHistory();
+                loadShowcase();
+                
+                if (info.loggedIn) {
+                    document.getElementById('auth-section').classList.add('hidden');
+                    document.getElementById('user-section').classList.remove('hidden');
+                    document.getElementById('user-display').innerText = info.username;
+                    
+                    document.getElementById('res-4k').disabled = false;
+                    document.getElementById('res-4k').innerText = "4K";
+
+                    if (info.isAdmin) {
+                        document.getElementById('admin-section').classList.remove('hidden');
+                        loadAdminData();
+                    }
+                } else {
+                    document.getElementById('auth-section').classList.remove('hidden');
+                    document.getElementById('user-section').classList.add('hidden');
+                    document.getElementById('admin-section').classList.add('hidden');
+                    
+                    document.getElementById('res-4k').disabled = true;
+                    document.getElementById('res-4k').innerText = "4K (登录后可用)";
+                    if (document.getElementById('resolution').value === '4K') {
+                        document.getElementById('resolution').value = '2K';
+                    }
+                }
+            }
+        }
+
+        async function loadUserHistory() {
+            const token = localStorage.getItem('kig_token');
+            const res = await fetch('/api/user/history', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            const data = await res.json();
+            const list = document.getElementById('history-list');
+            const title = document.getElementById('history-title');
+            
+            if (title) title.innerText = currentUser ? '我的历史记录 (最近20条)' : '我的历史记录 (按IP识别)';
+
+            list.innerHTML = data.map(item => `
+                <div class="bw-border bg-zinc-900 aspect-square relative cursor-pointer group flex flex-col items-center justify-center overflow-hidden" onclick="viewHistoryById('${item.id}')">
+                    ${item.thumbnail ? 
+                        `<img src="${item.thumbnail}" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity">` : 
+                        `<div class="text-[10px] font-bold text-zinc-400">${item.aspectRatio}</div>
+                         <div class="text-[8px] text-zinc-600 uppercase mt-1">TASK ${item.id.slice(-4)}</div>`
+                    }
+                    <div class="absolute bottom-0 left-0 right-0 bg-black/60 p-1 text-[7px] text-zinc-400 flex justify-between items-center">
+                        <span>${item.aspectRatio}</span>
+                        <span>${new Date(parseInt(item.id)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <span class="text-[10px] uppercase font-bold">查看详情</span>
+                    </div>
+                </div>
+            `).join('') || `<p class="text-zinc-500 text-xs col-span-full py-8">暂无${currentUser ? '' : '本地'}历史记录</p>`;
+        }
+
+        async function viewHistoryItem(item) {
+            if (!item || (!item.imageUrl && !item.id)) return;
+            
+            // 如果只有 ID 没有大图，尝试拉取
+            if (!item.imageUrl && item.id) {
+                const token = localStorage.getItem('kig_token');
+                const res = await fetch(`/api/task?id=${item.id}`, {
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                });
+                if (res.ok) {
+                    const fullItem = await res.json();
+                    item.imageUrl = fullItem.imageUrl;
+                    item.originalImageUrl = fullItem.originalImageUrl; // 获取保存的原图
+                    item.thinking = fullItem.thinking;
+                } else {
+                    return alert('无法获取任务详情，可能是权限不足或记录已过期');
+                }
+            }
+
+            currentTaskId = item.id;
+            document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+            
+            const resultImg = document.getElementById('result-img');
+            const previewInput = document.getElementById('preview-input');
+            const uploadPlaceholder = document.getElementById('upload-placeholder');
+            const placeholder = document.getElementById('result-placeholder');
+            const actions = document.getElementById('result-actions');
+            const thinking = document.getElementById('thinking-process');
+            const thinkingContent = document.getElementById('thinking-content');
+
+            // 显示原图和生成图对比
+            if (item.originalImageUrl && previewInput) {
+                previewInput.src = item.originalImageUrl;
+                previewInput.classList.remove('hidden');
+                if (uploadPlaceholder) uploadPlaceholder.classList.add('hidden');
+            }
+
+            if (resultImg) resultImg.src = item.imageUrl;
+            if (placeholder) placeholder.classList.add('hidden');
+            if (actions) actions.classList.remove('hidden');
+            
+            if (item.thinking && thinking && thinkingContent) {
+                thinking.classList.remove('hidden');
+                thinkingContent.innerText = item.thinking;
+            } else if (thinking) {
+                thinking.classList.add('hidden');
+            }
+        }
+
+        async function viewHistoryById(taskId) {
+            await viewHistoryItem({ id: taskId });
+        }
+
+        async function publishToShowcase() {
+            if (!currentTaskId) return alert('未找到当前任务 ID');
+            const token = localStorage.getItem('kig_token');
+            const originalImg = document.getElementById('preview-input');
+            
+            const res = await fetch('/api/showcase/publish', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ 
+                    taskId: currentTaskId,
+                    originalUrl: originalImg.src
+                })
+            });
+            
+            if (res.ok) {
+                alert('已发布到作品广场！');
+                loadShowcase();
+            } else {
+                const data = await res.json();
+                alert(data.error || '发布失败');
+            }
+        }
+
+        async function loadShowcase() {
+            const res = await fetch('/api/showcase/list');
+            const data = await res.json();
+            const list = document.getElementById('showcase-list');
+            
+            // 过滤掉可能存在的 null 或损坏数据
+            const validData = (data || []).filter(item => item && item.imageUrl);
+
+            list.innerHTML = validData.map(item => `
+                <div class="space-y-2 group relative">
+                    <div class="grid grid-cols-2 gap-1 bw-border bg-zinc-900 aspect-[4/3] overflow-hidden">
+                        <img src="${item.originalUrl || ''}" class="w-full h-full object-cover cursor-zoom-in transition-all hover:scale-105" title="点击放大原图" onclick="showLightbox('${item.originalUrl}')">
+                        <img src="${item.imageUrl}" class="w-full h-full object-cover cursor-zoom-in transition-all hover:scale-105" title="点击放大生成图" onclick="showLightbox('${item.imageUrl}')">
+                    </div>
+                    <div class="flex justify-between items-center px-1">
+                        <span class="text-[10px] text-zinc-500 uppercase">${item.user} · ${new Date(item.publishedAt).toLocaleDateString()}</span>
+                        <div class="flex gap-2">
+                            ${currentUser && currentUser.isAdmin ? `
+                                <button onclick="deleteShowcaseItem('${item.id}')" class="text-[10px] text-red-500 hover:underline uppercase">删除</button>
+                            ` : ''}
+                            <button onclick="viewHistoryItem(${JSON.stringify(item).replace(/"/g, '&quot;')})" class="text-[10px] hover:underline uppercase">详情</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') || '<p class="text-zinc-500 text-xs col-span-full italic py-8 text-center">广场暂时空空如也...</p>';
+        }
+
+        async function deleteShowcaseItem(taskId) {
+            if (!confirm('确定要从作品广场删除此作品吗？')) return;
+            const token = localStorage.getItem('kig_token');
+            const res = await fetch('/api/admin/showcase/delete', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ taskId })
+            });
+            if (res.ok) {
+                alert('已成功删除');
+                loadShowcase();
+            } else {
+                alert('删除失败');
+            }
+        }
+
+        function typeWriter(text, element, speed = 10) {
+            element.innerText = '';
+            let i = 0;
+            clearInterval(element.interval);
+            element.interval = setInterval(() => {
+                if (i < text.length) {
+                    element.innerText += text.charAt(i);
+                    i++;
+                    // 自动随文字滚动
+                    if (element.offsetHeight < element.scrollHeight) {
+                        element.scrollTop = element.scrollHeight;
+                    }
+                } else {
+                    clearInterval(element.interval);
+                }
+            }, speed);
+        }
+
+        // Generation
+        document.getElementById('generate-btn').onclick = async () => {
+            if (!selectedFile) return alert('请先上传图片');
+            
+            const btn = document.getElementById('generate-btn');
+            const overlay = document.getElementById('loading-overlay');
+            const resultImg = document.getElementById('result-img');
+            const placeholder = document.getElementById('result-placeholder');
+            const actions = document.getElementById('result-actions');
+            const thinking = document.getElementById('thinking-process');
+            const thinkingContent = document.getElementById('thinking-content');
+
+            btn.disabled = true;
+            overlay.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+            actions.classList.add('hidden');
+            thinking.classList.remove('hidden');
+            thinkingContent.innerText = "模型正在思考...";
+            
+            currentTaskId = null; // 重置当前任务 ID
+
+            try {
+                const imageHash = await calculateHash(selectedFile);
+                const base64 = await toBase64(selectedFile);
+                const token = localStorage.getItem('kig_token');
+                
+                const ratioSelector = document.getElementById('aspect-ratio');
+                const finalRatio = ratioSelector.value === 'auto' ? (ratioSelector.dataset.detected || '1:1') : ratioSelector.value;
+
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        imageBase64: base64.split(',')[1],
+                        mimeType: selectedFile.type,
+                        aspectRatio: finalRatio,
+                        resolution: document.getElementById('resolution').value,
+                        imageHash: imageHash
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '生成失败');
+                }
+
+                currentTaskId = res.headers.get('X-Task-Id');
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let fullThinkingText = "";
+                let buffer = "";
+
+                thinkingContent.innerText = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // 尝试从 buffer 中提取完整的 JSON 对象
+                    let startIdx;
+                    while ((startIdx = buffer.indexOf('{')) !== -1) {
+                        let depth = 0;
+                        let endIdx = -1;
+                        for (let i = startIdx; i < buffer.length; i++) {
+                            if (buffer[i] === '{') depth++;
+                            else if (buffer[i] === '}') {
+                                depth--;
+                                if (depth === 0) {
+                                    endIdx = i;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (endIdx !== -1) {
+                            const jsonStr = buffer.substring(startIdx, endIdx + 1);
+                            buffer = buffer.substring(endIdx + 1);
+                            try {
+                                const json = JSON.parse(jsonStr);
+                                
+                                // 获取任务ID (后端在保存时生成，这里我们通过时间戳模拟或等待流结束刷新)
+                                // 实际上为了准确，我们在保存成功后(init/loadHistory)能拿到ID。
+                                // 这里我们记录一个临时的，或者在保存函数里生成。
+                                // 修正：由于流式输出不带ID，我们在流结束后调用一次 init 刷新，
+                                // 或者让后端在流结束块带上 ID。
+                                // 简化处理：我们在流开始前记下当前时间戳作为潜在 ID。
+                                if (!currentTaskId) currentTaskId = Date.now().toString();
+
+                                const parts = json.candidates?.[0]?.content?.parts || [];
+                                for (const part of parts) {
+                                    if (part.text) {
+                                        fullThinkingText += part.text;
+                                        thinkingContent.innerText = fullThinkingText;
+                                        thinkingContent.scrollTop = thinkingContent.scrollHeight;
+                                    }
+                                    if (part.inlineData) {
+                                        const imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                                        resultImg.src = imageUrl;
+                                        actions.classList.remove('hidden');
+                                        overlay.classList.add('hidden');
+                                        
+                                        // 异步生成缩略图并更新历史记录预览
+                                        setTimeout(async () => {
+                                            const thumb = await createThumbnail(imageUrl);
+                                            fetch('/api/history/thumbnail', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ taskId: currentTaskId, thumbnail: thumb })
+                                            }).then(() => {
+                                                if (currentUser) loadUserHistory();
+                                                loadShowcase();
+                                            });
+                                        }, 100);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Parse chunk error:", e);
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                if (currentUser) loadUserHistory(); // 刷新历史
+                loadShowcase(); // 刷新广场
+            } catch (err) {
+                alert('发生错误: ' + err.message);
+                placeholder.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                overlay.classList.add('hidden');
+                init(); // Refresh quota
+            }
+        };
+
+        const toBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const rawData = e.target.result;
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const maxDim = 2000;
+                        if (width > maxDim || height > maxDim) {
+                            if (width > height) {
+                                height = (maxDim / width) * height;
+                                width = maxDim;
+                            } else {
+                                width = (maxDim / height) * width;
+                                height = maxDim;
+                            }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    } catch (err) {
+                        console.error('Compression failed, using raw data:', err);
+                        resolve(rawData);
+                    }
+                };
+                img.onerror = () => resolve(rawData);
+                img.src = rawData;
+            };
+            reader.onerror = error => reject(error);
+            reader.readAsDataURL(file);
+        });
+
+        // Reports
+        async function submitReport() {
+            const reason = document.getElementById('report-reason').value;
+            const resultImg = document.getElementById('result-img');
+            const originalImg = document.getElementById('preview-input');
+            if (!reason) return alert('请输入反馈内容');
+
+            await fetch('/api/report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imageUrl: resultImg.src,
+                    originalUrl: originalImg.src,
+                    reason: reason,
+                    prompt: 'TODO: current prompt'
+                })
+            });
+            alert('反馈已提交，感谢！');
+            hideModal('report-modal');
+        }
+
+        // Admin Actions
+        async function loadAdminData() {
+            const token = localStorage.getItem('kig_token');
+            const [pRes, rRes, hRes] = await Promise.all([
+                fetch('/api/admin/get-prompt'),
+                fetch('/api/admin/reports', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/admin/history', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+            
+            const pData = await pRes.json();
+            const promptEl = document.getElementById('admin-prompt');
+            if (promptEl) promptEl.value = pData.prompt;
+
+            const rData = await rRes.json();
+            const rList = document.getElementById('reports-list');
+            if (rList) {
+                rList.innerHTML = rData.map(r => `
+                    <div class="bw-border p-3 text-xs space-y-2">
+                        <div class="flex justify-between text-zinc-500">
+                            <span>${new Date(r.time).toLocaleString()}</span>
+                        </div>
+                        <p class="font-bold">原因: ${r.reason}</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <span class="text-[10px] text-zinc-500 uppercase">原图</span>
+                                <img src="${r.originalUrl || ''}" class="max-h-48 w-full object-contain bw-border bg-zinc-900">
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[10px] text-zinc-500 uppercase">生成结果</span>
+                                <img src="${r.imageUrl || ''}" class="max-h-48 w-full object-contain bw-border bg-zinc-900">
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<p class="text-zinc-500 text-xs">暂无反馈</p>';
+            }
+
+            const hData = await hRes.json();
+            const hList = document.getElementById('admin-history-list');
+            
+            // 自动提取活跃用户到额度管理的下拉列表
+            const activeUsersList = document.getElementById('active-users-list');
+            if (activeUsersList && hData.length > 0) {
+                const uniqueUsers = [...new Set(hData.map(h => h.user))];
+                activeUsersList.innerHTML = uniqueUsers.map(u => `<option value="${u}">`).join('');
+            }
+
+            if (hList) {
+                hList.innerHTML = hData.map(h => `
+                    <div class="bw-border p-2 text-[10px] flex justify-between items-center bg-zinc-900/30 gap-3">
+                        <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                            ${h.thumbnail ? `<img src="${h.thumbnail}" class="w-10 h-10 object-cover bw-border">` : `<div class="w-10 h-10 bg-zinc-800 bw-border flex items-center justify-center text-[8px] text-zinc-600">NO IMG</div>`}
+                            <div class="space-y-1 overflow-hidden">
+                                <div class="flex gap-2">
+                                    <span class="text-white font-bold truncate">${h.user}</span>
+                                    <span class="text-zinc-500">${new Date(parseInt(h.id)).toLocaleString()}</span>
+                                </div>
+                                <div class="text-zinc-400 truncate">Ratio: ${h.aspectRatio} | Res: ${h.resolution}</div>
+                            </div>
+                        </div>
+                        <button onclick="viewHistoryById('${h.id}')" class="bw-btn px-3 py-1 uppercase font-bold text-[9px] whitespace-nowrap">详情</button>
+                    </div>
+                `).join('') || '<p class="text-zinc-500 text-xs">暂无任务记录</p>';
+            }
+        }
+
+        async function updatePrompt() {
+            const token = localStorage.getItem('kig_token');
+            const prompt = document.getElementById('admin-prompt').value;
+            const res = await fetch('/api/admin/prompt', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ prompt })
+            });
+            if (res.ok) alert('提示词已更新');
+        }
+
+        async function generateInvite() {
+            const token = localStorage.getItem('kig_token');
+            const res = await fetch('/api/admin/gen-invite', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const display = document.getElementById('new-invite-code');
+            display.innerText = data.code;
+            display.classList.remove('hidden');
+        }
+
+        async function resetQuota() {
+            const token = localStorage.getItem('kig_token');
+            const type = document.getElementById('reset-type').value;
+            const targetId = document.getElementById('reset-id').value;
+            if (!targetId) return alert('请输入用户名或 IP');
+
+            const res = await fetch('/api/admin/reset-quota', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ type, targetId })
+            });
+            if (res.ok) {
+                alert(`已成功重置 ${targetId} 的今日额度`);
+                document.getElementById('reset-id').value = '';
+            } else {
+                alert('重置失败，请检查权限或输入');
+            }
+        }
+
+        async function manualUploadShowcase() {
+            const originalFile = document.getElementById('manual-original').files[0];
+            const generatedFile = document.getElementById('manual-generated').files[0];
+            const token = localStorage.getItem('kig_token');
+
+            if (!originalFile || !generatedFile) return alert('请同时选择原图和生成图');
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = 'UPLOADING...';
+
+            try {
+                // 压缩原图和生成图
+                const originalBase64 = await toBase64(originalFile);
+                const generatedBase64 = await toBase64(generatedFile);
+
+                const res = await fetch('/api/admin/showcase/add', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        originalUrl: originalBase64,
+                        imageUrl: generatedBase64
+                    })
+                });
+
+                if (res.ok) {
+                    alert('手动发布成功！');
+                    document.getElementById('manual-original').value = '';
+                    document.getElementById('manual-generated').value = '';
+                    loadShowcase();
+                } else {
+                    const data = await res.json();
+                    alert(data.error || '发布失败');
+                }
+            } catch (err) {
+                alert('发生错误: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '上传并发布';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
